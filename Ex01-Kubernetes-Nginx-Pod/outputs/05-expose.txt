@@ -1,2 +1,0 @@
-$ kubectl expose pod hello-k8s --type=NodePort --port=80
-service/hello-k8s exposed

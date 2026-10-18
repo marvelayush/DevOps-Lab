@@ -1,14 +1,14 @@
-# DevOps Lab – Course Work
+# DevOps Lab
 
 | | |
 |---|---|
-| **Name** | Ayush Narayan |
-| **USN** | 1BM23IS047 |
-| **Branch** | Information Science & Engineering |
-| **College** | B.M.S. College of Engineering, Bengaluru |
-| **Course** | DevOps |
+| Name | Ayush Narayan |
+| USN | 1BM23IS047 |
+| Branch | Information Science & Engineering |
+| College | B.M.S. College of Engineering (BMSCE), Bengaluru |
+| Course | DevOps |
 
-Lab exercises based on the [DevOps Lab Manual](https://github.com/SunagP/DevOps-Lab). Each folder contains the source code, configuration files, the commands used, and screenshots of the output.
+Lab exercises based on the [DevOps Lab Manual](https://github.com/SunagP/DevOps-Lab). Every exercise folder has a `README.md` (objective, environment, steps with real output, how it works, commands, observations, viva questions, result) and a `screenshots/` folder.
 
 ## Exercises
 
@@ -25,16 +25,21 @@ Lab exercises based on the [DevOps Lab Manual](https://github.com/SunagP/DevOps-
 | 9 | [Jenkins Multi-Stage Pipeline for a Python App](Ex09-Jenkins-MultiStage-Pipeline/) | Jenkins Pipeline, unittest |
 | 10 | [Multi-Node Kubernetes Cluster with Multiple Apps](Ex10-Multi-Node-Kubernetes/) | Minikube multi-node, anti-affinity |
 
+## Environment
+
+- Windows 11 Home + WSL2 (Ubuntu 24.04.2 LTS, kernel 5.15.167.4-microsoft-standard-WSL2)
+- Docker Desktop (Engine 29.4.1) with WSL integration
+- Minikube v1.39.0 (docker driver), Kubernetes v1.37.0
+- kubectl v1.34.1
+- Python 3.12 (WSL)
+- Jenkins in Docker (`jenkins/jenkins:lts`)
+
 ## Repository structure
-```
+
+```text
 ExNN-<name>/
-├── README.md        # aim, steps, output screenshots, result
-├── <source files>   # app code, Dockerfiles, YAML, Jenkinsfile
-└── screenshots/     # output screenshots
+├── README.md       # everything for the exercise, including source code
+└── screenshots/    # output screenshots referenced from the README
 ```
 
-## Environment
-- Ubuntu / WSL2 with Docker
-- Minikube + kubectl
-- Python 3
-- Jenkins (Docker image `jenkins/jenkins:lts`)
+Ex06, Ex08 and Ex09 also keep their real source files in the folder, because the Jenkins jobs check them out from this repository.
