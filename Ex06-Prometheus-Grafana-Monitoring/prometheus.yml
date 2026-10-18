@@ -12,6 +12,7 @@ scrape_configs:
 
   - job_name: "delivery_service"
     static_configs:
-      # Linux / WSL: docker0 host IP (check with: ip addr show docker0)
-      # Docker Desktop on Windows/Mac: use "host.docker.internal:8000"
-      - targets: ["172.17.0.1:8000"]
+      # Docker Desktop (Windows/Mac, WSL2 integration): there is no docker0 bridge,
+      # so the host is reached through host.docker.internal.
+      # Native Linux Docker: use the docker0 IP instead, e.g. "172.17.0.1:8000".
+      - targets: ["host.docker.internal:8000"]
