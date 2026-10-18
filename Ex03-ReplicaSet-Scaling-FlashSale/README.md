@@ -95,12 +95,11 @@ replicaset.apps/flashsale-rs created
 service/flashsale-svc created
 
 NAME           DESIRED   CURRENT   READY   AGE
-flashsale-rs   3         3         3       21s
-
+flashsale-rs   3         3         3       55s
 NAME                 READY   STATUS    RESTARTS   AGE
-flashsale-rs-c7qlw   1/1     Running   0          21s
-flashsale-rs-d9f9c   1/1     Running   0          21s
-flashsale-rs-g9ncz   1/1     Running   0          21s
+flashsale-rs-c7qlw   1/1     Running   0          55s
+flashsale-rs-d9f9c   1/1     Running   0          55s
+flashsale-rs-g9ncz   1/1     Running   0          55s
 ```
 
 The ReplicaSet started 3 Pods, and all of them passed the readiness probe.
@@ -119,14 +118,13 @@ kubectl get pods
 replicaset.apps/flashsale-rs scaled
 
 NAME           DESIRED   CURRENT   READY   AGE
-flashsale-rs   5         5         5       2m46s
-
+flashsale-rs   5         5         5       3m59s
 NAME                 READY   STATUS    RESTARTS   AGE
-flashsale-rs-c7qlw   1/1     Running   0          2m46s
-flashsale-rs-d9f9c   1/1     Running   0          2m46s
-flashsale-rs-g9ncz   1/1     Running   0          2m46s
-flashsale-rs-lljs4   1/1     Running   0          16s
-flashsale-rs-rz4j6   1/1     Running   0          16s
+flashsale-rs-c7qlw   1/1     Running   0          4m
+flashsale-rs-d9f9c   1/1     Running   0          4m
+flashsale-rs-g9ncz   1/1     Running   0          4m
+flashsale-rs-lljs4   1/1     Running   0          90s
+flashsale-rs-rz4j6   1/1     Running   0          90s
 ```
 
 Scaled from 3 to 5 replicas, and 2 new Pods were added.
@@ -136,22 +134,21 @@ Scaled from 3 to 5 replicas, and 2 new Pods were added.
 ### 5. Delete a Pod (self-healing)
 
 ```bash
-kubectl delete pod flashsale-rs-c7qlw
+kubectl delete pod flashsale-rs-d9f9c
 kubectl get pods
 ```
 
 ```text
-pod "flashsale-rs-c7qlw" deleted from default namespace
-
+pod "flashsale-rs-d9f9c" deleted from default namespace
 NAME                 READY   STATUS    RESTARTS   AGE
-flashsale-rs-4kc6c   0/1     Running   0          3s
-flashsale-rs-d9f9c   1/1     Running   0          5m3s
-flashsale-rs-g9ncz   1/1     Running   0          5m3s
-flashsale-rs-lljs4   1/1     Running   0          2m33s
-flashsale-rs-rz4j6   1/1     Running   0          2m33s
+flashsale-rs-4kc6c   1/1     Running   0          36s
+flashsale-rs-g9ncz   1/1     Running   0          5m36s
+flashsale-rs-lljs4   1/1     Running   0          3m6s
+flashsale-rs-rz4j6   1/1     Running   0          3m6s
+flashsale-rs-vkppk   0/1     Running   0          2s
 ```
 
-The ReplicaSet created `flashsale-rs-4kc6c` right away to get back to 5. It showed `0/1` until its readiness probe passed. Deleting `flashsale-rs-d9f9c` worked the same way, with `flashsale-rs-vkppk` as the replacement.
+The ReplicaSet created `flashsale-rs-vkppk` right away to get back to 5. It showed `0/1` until its readiness probe passed. An earlier delete of `flashsale-rs-c7qlw` was replaced the same way by `flashsale-rs-4kc6c`.
 
 ![self healing](screenshots/03-self-healing.png)
 
@@ -162,12 +159,12 @@ kubectl get pods -o wide
 ```
 
 ```text
-NAME                 READY   STATUS    RESTARTS   AGE     IP           NODE
-flashsale-rs-4kc6c   1/1     Running   0          88s     10.244.0.8   minikube
-flashsale-rs-g9ncz   1/1     Running   0          6m28s   10.244.0.4   minikube
-flashsale-rs-lljs4   1/1     Running   0          3m58s   10.244.0.7   minikube
-flashsale-rs-rz4j6   1/1     Running   0          3m58s   10.244.0.6   minikube
-flashsale-rs-vkppk   1/1     Running   0          54s     10.244.0.9   minikube
+NAME                 READY   STATUS    RESTARTS   AGE     IP           NODE       NOMINATED NODE   READINESS GATES
+flashsale-rs-4kc6c   1/1     Running   0          117s    10.244.0.8   minikube   <none>           <none>
+flashsale-rs-g9ncz   1/1     Running   0          6m57s   10.244.0.4   minikube   <none>           <none>
+flashsale-rs-lljs4   1/1     Running   0          4m27s   10.244.0.7   minikube   <none>           <none>
+flashsale-rs-rz4j6   1/1     Running   0          4m27s   10.244.0.6   minikube   <none>           <none>
+flashsale-rs-vkppk   1/1     Running   0          83s     10.244.0.9   minikube   <none>           <none>
 ```
 
 All 5 Pods ran on the single `minikube` node, each with its own IP.
@@ -186,7 +183,6 @@ kubectl port-forward svc/flashsale-svc 8080:80
 Forwarding from 127.0.0.1:8080 -> 5000
 Forwarding from [::1]:8080 -> 5000
 Handling connection for 8080
-Handling connection for 8080
 ```
 
 ![port-forward](screenshots/05-port-forward.png)
@@ -195,7 +191,7 @@ Opened the API in the browser:
 
 ```text
 http://localhost:8080/buy
-{"item":"Headphones","served_by_pod":"flashsale-rs-fxn2c","status":"success","time":"11:48:30","user":"user733"}
+{"item":"Shoes","served_by_pod":"flashsale-rs-fxn2c","status":"success","time":"11:53:37","user":"user466"}
 
 http://localhost:8080/health
 {"pod":"flashsale-rs-fxn2c","status":"healthy"}
@@ -208,21 +204,22 @@ http://localhost:8080/health
 Port-forward always connects to a single Pod, so I used an in-cluster test to show load balancing:
 
 ```bash
-kubectl run lb-test --rm -i --restart=Never --image=curlimages/curl -- sh -c 'for i in 1 2 3 4 5 6 7 8; do curl -s http://flashsale-svc/buy; echo; done'
+kubectl run lb-test --rm -i --restart=Never --image=curlimages/curl -- sh -c 'sleep 3; for i in 1 2 3 4 5 6 7 8; do curl -s http://flashsale-svc/buy; echo; done'
 ```
 
 ```text
-{"item":"Headphones","served_by_pod":"flashsale-rs-2j6g9","status":"success","time":"11:56:24","user":"user844"}
-{"item":"Shoes","served_by_pod":"flashsale-rs-2j6g9","status":"success","time":"11:56:24","user":"user421"}
-{"item":"Headphones","served_by_pod":"flashsale-rs-5llr5","status":"success","time":"11:56:24","user":"user804"}
-{"item":"Shoes","served_by_pod":"flashsale-rs-2j6g9","status":"success","time":"11:56:24","user":"user522"}
-{"item":"Shoes","served_by_pod":"flashsale-rs-xzkcm","status":"success","time":"11:56:24","user":"user383"}
-{"item":"Laptop","served_by_pod":"flashsale-rs-2j6g9","status":"success","time":"11:56:24","user":"user293"}
-{"item":"Headphones","served_by_pod":"flashsale-rs-2j6g9","status":"success","time":"11:56:24","user":"user794"}
-{"item":"Smartphone","served_by_pod":"flashsale-rs-5llr5","status":"success","time":"11:56:24","user":"user19"}
+{"item":"Shoes","served_by_pod":"flashsale-rs-xzkcm","status":"success","time":"11:58:21","user":"user129"}
+{"item":"Smartphone","served_by_pod":"flashsale-rs-5llr5","status":"success","time":"11:58:21","user":"user605"}
+{"item":"Smartphone","served_by_pod":"flashsale-rs-fxn2c","status":"success","time":"11:58:21","user":"user375"}
+{"item":"Smartphone","served_by_pod":"flashsale-rs-2j6g9","status":"success","time":"11:58:21","user":"user798"}
+{"item":"Shoes","served_by_pod":"flashsale-rs-xbh6d","status":"success","time":"11:58:21","user":"user235"}
+{"item":"Smartphone","served_by_pod":"flashsale-rs-xbh6d","status":"success","time":"11:58:21","user":"user627"}
+{"item":"Headphones","served_by_pod":"flashsale-rs-xzkcm","status":"success","time":"11:58:21","user":"user364"}
+{"item":"Laptop","served_by_pod":"flashsale-rs-2j6g9","status":"success","time":"11:58:21","user":"user338"}
+pod "lb-test" deleted from default namespace
 ```
 
-The Service sent the 8 requests to 3 different Pods.
+The Service spread the 8 requests across all 5 Pods.
 
 ![load balancing](screenshots/08-load-balancing.png)
 
@@ -291,17 +288,19 @@ kubectl get rs
 kubectl get pods
 kubectl scale rs flashsale-rs --replicas=5
 kubectl delete pod flashsale-rs-c7qlw
+kubectl delete pod flashsale-rs-d9f9c
 kubectl get pods -o wide
 kubectl port-forward svc/flashsale-svc 8080:80
 curl http://localhost:8080/buy
 curl http://localhost:8080/health
-kubectl run lb-test --rm -i --restart=Never --image=curlimages/curl -- sh -c 'for i in 1 2 3 4 5 6 7 8; do curl -s http://flashsale-svc/buy; echo; done'
+kubectl run lb-test --rm -i --restart=Never --image=curlimages/curl -- sh -c 'sleep 3; for i in 1 2 3 4 5 6 7 8; do curl -s http://flashsale-svc/buy; echo; done'
 kubectl delete -f flashsale-replicaset.yaml
 ```
 
 ## Problems Faced
 
 - Through `kubectl port-forward`, every `/buy` request returned the same `served_by_pod`, because port-forward attaches to one Pod and bypasses Service load balancing. I ran the requests from a curl Pod inside the cluster instead, which went through the Service.
+- The first in-cluster run printed only 3 of the 8 responses. The requests finished before kubectl had attached to the Pod's output. Adding `sleep 3` at the start of the command fixed it.
 
 ## Result
 
