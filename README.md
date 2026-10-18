@@ -8,7 +8,7 @@
 | College | B.M.S. College of Engineering (BMSCE), Bengaluru |
 | Course | DevOps |
 
-Lab exercises based on the [DevOps Lab Manual](https://github.com/SunagP/DevOps-Lab). Every exercise folder has a `README.md` (objective, environment, steps with real output, how it works, commands, observations, viva questions, result) and a `screenshots/` folder.
+Lab exercises based on the [DevOps Lab Manual](https://github.com/SunagP/DevOps-Lab). Every exercise folder has a `README.md` (objective, environment, steps with output, how it works, commands used, result) and a `screenshots/` folder.
 
 ## Exercises
 
