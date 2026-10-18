@@ -50,11 +50,11 @@ Ex01-Kubernetes-Nginx-Pod/
 ├── commands.sh      # all minikube / kubectl commands used, in order
 ├── README.md
 └── screenshots/
-    ├── 01-minikube-start.png
-    ├── 02-pod-running.png
-    ├── 03-service.png
-    ├── 04-nginx-browser.png
-    └── 05-tool-versions.png
+    ├── 01-tool-versions.png
+    ├── 02-minikube-start.png
+    ├── 03-pod-running.png
+    ├── 04-service.png
+    └── 05-nginx-browser.png
 ```
 
 Source: [commands.sh](commands.sh)
@@ -83,7 +83,7 @@ Docker version 29.4.1, build 055a478
 
 All three tools were installed. Docker came from Docker Desktop's WSL integration.
 
-![tool versions](screenshots/05-tool-versions.png)
+![tool versions](screenshots/01-tool-versions.png)
 
 ### 2. Start Minikube
 
@@ -111,7 +111,7 @@ minikube start
 
 The cluster was running Kubernetes v1.37.0 with containerd as the container runtime, and kubectl now pointed to it. The cluster had first been created with `minikube start --driver=docker`, so this run reused that profile.
 
-![minikube start](screenshots/01-minikube-start.png)
+![minikube start](screenshots/02-minikube-start.png)
 
 ### 3. Create the Pod
 
@@ -131,7 +131,7 @@ hello-k8s   1/1     Running   0          6m7s
 
 `1/1` means one out of one container in the Pod was ready, and `Running` means it had started without errors.
 
-![kubectl get pods](screenshots/02-pod-running.png)
+![kubectl get pods](screenshots/03-pod-running.png)
 
 ### 4. Look inside the Pod
 
@@ -182,7 +182,7 @@ kubernetes   ClusterIP   10.96.0.1       <none>        443/TCP        18m
 
 `80:30258/TCP` means Service port 80 is reachable on port 30258 of the node. The `kubernetes` Service is the built-in one for the API server.
 
-![kubectl get svc](screenshots/03-service.png)
+![kubectl get svc](screenshots/04-service.png)
 
 ### 6. Open the app in the browser
 
@@ -211,7 +211,7 @@ minikube service hello-k8s
 
 The first table shows the real NodePort URL. The second shows the tunnel URL, which I opened in Chrome to get the "Welcome to nginx!" page.
 
-![nginx page](screenshots/04-nginx-browser.png)
+![nginx page](screenshots/05-nginx-browser.png)
 
 ### 7. Clean up
 
