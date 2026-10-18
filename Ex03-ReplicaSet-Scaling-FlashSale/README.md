@@ -62,14 +62,15 @@ Ex03-ReplicaSet-Scaling-FlashSale/
     ├── 09-describe-rs-logs.png
     ├── 10-home-and-user-buy.png
     ├── 11-docker-push.png
-    └── 12-dockerhub-repo.png
+    ├── 12-dockerhub-repo.png
+    └── 13-kubectl-exec.png
 ```
 
 Source: [app.py](app.py) · [Dockerfile](Dockerfile) · [flashsale-replicaset.yaml](flashsale-replicaset.yaml)
 
 ## Steps
 
-I ran this exercise three times on the same cluster. Run 1 covers scaling and self-healing, run 2 covers access and load balancing, and run 3 covers inspection and the Docker Hub push. Each run created a new set of Pod names.
+I ran this exercise four times on the same cluster. Run 1 covers scaling and self-healing, run 2 covers access and load balancing, run 3 covers inspection and the Docker Hub push, and run 4 covers `kubectl exec`. Each run created a new set of Pod names.
 
 ### 1. Start a fresh single-node cluster
 
@@ -399,9 +400,44 @@ The repository page on Docker Hub confirmed the upload: `friction2004/flashsale`
 
 ![docker hub repo](screenshots/12-dockerhub-repo.png)
 
-### 13. Clean up
+At the end of run 3, I stopped port-forward and deleted the ReplicaSet and Service.
 
-I stopped port-forward and deleted the ReplicaSet and the Service, which also removed all their Pods.
+### 13. Open a shell inside a Pod with kubectl exec (run 4)
+
+Re-applied the ReplicaSet and scaled to 5 (new Pods `4slhj`, `9wqwk`, `k8km9`, `lnh69`, `xcnw5`).
+
+The manual's tips suggest `kubectl exec` to get into a Pod's container. It is useful for checking an app from the inside, without any Service or port-forward.
+
+```bash
+kubectl get pods
+kubectl exec -it flashsale-rs-4slhj -- bash
+hostname && ls /app && python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:5000/health').read().decode())"
+exit
+```
+
+```text
+NAME                 READY   STATUS    RESTARTS   AGE
+flashsale-rs-4slhj   1/1     Running   0          86s
+flashsale-rs-9wqwk   1/1     Running   0          86s
+flashsale-rs-k8km9   1/1     Running   0          86s
+flashsale-rs-lnh69   1/1     Running   0          86s
+flashsale-rs-xcnw5   1/1     Running   0          86s
+root@flashsale-rs-4slhj:/app# hostname && ls /app && python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:5000/health').read().decode())"
+flashsale-rs-4slhj
+__pycache__  app.py
+{"pod":"flashsale-rs-4slhj","status":"healthy"}
+
+root@flashsale-rs-4slhj:/app# exit
+exit
+```
+
+The prompt changed to `root@flashsale-rs-4slhj:/app#`, so I was inside the container, in its `WORKDIR`. `hostname` printed the Pod name, which is why the API's replies always name their Pod. `/app` held `app.py` copied by the Dockerfile (and Python's `__pycache__`). The health check from inside, on `localhost:5000`, returned `healthy`. The slim image has no curl, so I used Python's `urllib`.
+
+![kubectl exec](screenshots/13-kubectl-exec.png)
+
+### 14. Clean up
+
+I deleted the ReplicaSet and the Service, which also removed all their Pods.
 
 ```bash
 kubectl delete -f flashsale-replicaset.yaml
@@ -497,6 +533,9 @@ docker login
 docker build -t friction2004/flashsale:1.0 .
 docker push friction2004/flashsale:1.0
 docker images friction2004/flashsale
+kubectl exec -it flashsale-rs-4slhj -- bash
+hostname && ls /app && python -c "import urllib.request; print(urllib.request.urlopen('http://localhost:5000/health').read().decode())"
+exit
 kubectl delete -f flashsale-replicaset.yaml
 ```
 
