@@ -6,3 +6,5 @@ venv/
 *.pid
 python-app-deploy/
 .DS_Store
+.claude/
+CLAUDE.md
