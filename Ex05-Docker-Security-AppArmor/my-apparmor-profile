@@ -1,0 +1,46 @@
+#include <tunables/global>
+
+# Profile name must match --security-opt apparmor=my-apparmor-profile
+profile my-apparmor-profile flags=(attach_disconnected,mediate_deleted) {
+  #include <abstractions/base>
+
+  # Allow the Flask app to use the network (bind to port 5000)
+  network inet tcp,
+  network inet udp,
+  network inet6 tcp,
+  network inet6 udp,
+
+  # Allow normal file access by default, then deny sensitive paths below
+  file,
+  umount,
+
+  # Let Docker stop/kill the container
+  signal (receive) peer=unconfined,
+  signal (send,receive) peer=my-apparmor-profile,
+
+  # Deny access to sensitive system files
+  deny /etc/passwd r,
+  deny /etc/shadow rw,
+  deny /etc/group r,
+
+  # Deny execution of shells inside the container
+  deny /bin/bash mx,
+  deny /usr/bin/bash mx,
+  deny /bin/sh mx,
+  deny /usr/bin/sh mx,
+  deny /bin/dash mx,
+  deny /usr/bin/dash mx,
+
+  # Deny writes to kernel interfaces
+  deny /proc/sys/** w,
+  deny /sys/** w,
+
+  # Capability restrictions
+  capability net_bind_service,
+  capability setuid,
+  capability setgid,
+  capability chown,
+  capability dac_override,
+  deny capability sys_admin,
+  deny mount,
+}

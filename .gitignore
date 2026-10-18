@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+venv/
+.venv/
+*.log
+*.pid
+python-app-deploy/
+.DS_Store

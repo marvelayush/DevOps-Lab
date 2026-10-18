@@ -1,0 +1,17 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - /etc/prometheus/alert_rules.yml
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: "delivery_service"
+    static_configs:
+      # Linux / WSL: docker0 host IP (check with: ip addr show docker0)
+      # Docker Desktop on Windows/Mac: use "host.docker.internal:8000"
+      - targets: ["172.17.0.1:8000"]

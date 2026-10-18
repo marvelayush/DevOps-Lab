@@ -1,0 +1,5 @@
+# Prometheus image with our config baked in (used by the Jenkins pipeline,
+# because bind-mounting files from inside the Jenkins container does not work)
+FROM prom/prometheus
+COPY prometheus.yml /etc/prometheus/prometheus.yml
+COPY alert_rules.yml /etc/prometheus/alert_rules.yml

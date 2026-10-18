@@ -1,0 +1,62 @@
+pipeline {
+    agent any
+
+    environment {
+        EX_DIR = 'Ex06-Prometheus-Grafana-Monitoring'
+    }
+
+    stages {
+        stage('Pre-check Docker') {
+            steps {
+                script {
+                    def dockerVersion = sh(script: 'docker --version', returnStdout: true).trim()
+                    if (sh(script: 'docker info > /dev/null 2>&1', returnStatus: true) != 0) {
+                        error 'Docker daemon is not reachable from Jenkins.'
+                    }
+                    echo "Docker is available and running: ${dockerVersion}"
+                }
+            }
+        }
+
+        stage('Cleanup Old Containers') {
+            steps {
+                sh 'docker rm -f delivery_metrics prometheus grafana || true'
+            }
+        }
+
+        stage('Build Docker Images') {
+            steps {
+                dir("${EX_DIR}") {
+                    sh 'docker build -t delivery_metrics .'
+                    sh 'docker build -t delivery_prometheus -f Dockerfile.prometheus .'
+                }
+            }
+        }
+
+        stage('Run Application') {
+            steps {
+                sh 'docker run -d --name delivery_metrics -p 8000:8000 delivery_metrics'
+            }
+        }
+
+        stage('Run Prometheus & Grafana') {
+            steps {
+                sh '''
+                docker run -d --name prometheus -p 9090:9090 delivery_prometheus
+                docker run -d --name grafana -p 3000:3000 grafana/grafana
+                '''
+            }
+        }
+
+        stage('Verify') {
+            steps {
+                sh 'sleep 10 && docker ps --filter name=delivery_metrics --filter name=prometheus --filter name=grafana'
+            }
+        }
+    }
+
+    post {
+        success { echo 'Monitoring stack is up: app :8000, Prometheus :9090, Grafana :3000' }
+        failure { echo 'Pipeline failed. Check the console output.' }
+    }
+}

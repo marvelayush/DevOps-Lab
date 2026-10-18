@@ -1,0 +1,3 @@
+$ kubectl delete svc hello-k8s; kubectl delete pod hello-k8s
+service "hello-k8s" deleted from default namespace
+pod "hello-k8s" deleted from default namespace
