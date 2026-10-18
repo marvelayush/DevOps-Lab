@@ -55,12 +55,15 @@ host: Running
 kubelet: Running
 apiserver: Running
 kubeconfig: Configured
+docker-env: in-use
 
 Kubernetes control plane is running at https://127.0.0.1:55645
 CoreDNS is running at https://127.0.0.1:55645/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
+
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
 ```
 
-Started Minikube with the Docker runtime and checked that the control plane and CoreDNS were running.
+Started Minikube with the Docker runtime and checked that the control plane and CoreDNS were running. `docker-env: in-use` confirmed that the shell was pointed at Minikube's Docker.
 
 ![minikube status](screenshots/05-minikube-status.png)
 
@@ -73,18 +76,28 @@ docker images flask-app
 ```
 
 ```text
-#5 [1/4] FROM docker.io/library/python:3.11-slim
-#6 [2/4] WORKDIR /app
-#7 [3/4] COPY app.py /app/
-#8 [4/4] RUN pip install --no-cache-dir flask
-#8 5.110 Successfully installed blinker-1.9.0 click-8.5.0 flask-3.1.3 itsdangerous-2.2.0 jinja2-3.1.6 markupsafe-3.0.4 werkzeug-3.1.9
-#9 naming to docker.io/library/flask-app 0.0s done
+[+] Building 1.7s (9/9) FINISHED                                    docker:default
+ => [internal] load build definition from Dockerfile                          0.1s
+ => => transferring dockerfile: 167B                                          0.0s
+ => [internal] load metadata for docker.io/library/python:3.11-slim           1.3s
+ => [internal] load .dockerignore                                             0.0s
+ => => transferring context: 2B                                               0.0s
+ => [1/4] FROM docker.io/library/python:3.11-slim@sha256:e88e9763f943ec1834f992a4b51e0f24500486803e8bc534e5767af9  0.0s
+ => [internal] load build context                                             0.1s
+ => => transferring context: 28B                                              0.0s
+ => CACHED [2/4] WORKDIR /app                                                 0.0s
+ => CACHED [3/4] COPY app.py /app/                                            0.0s
+ => CACHED [4/4] RUN pip install --no-cache-dir flask                         0.0s
+ => exporting to image                                                        0.0s
+ => => exporting layers                                                       0.0s
+ => => writing image sha256:2b94609d85b748c4352d19d3482a5b43d20699acd2b47b09ac0850a5b2889969  0.0s
+ => => naming to docker.io/library/flask-app                                  0.0s
 
 IMAGE              ID             DISK USAGE   CONTENT SIZE   EXTRA
 flask-app:latest   2b94609d85b7        141MB             0B
 ```
 
-Pointed the Docker CLI at Minikube's daemon and built `flask-app:latest` there.
+Pointed the Docker CLI at Minikube's daemon and built `flask-app:latest` there. The first build had installed Flask 3.1.3, so this run used the cached layers.
 
 ![docker build](screenshots/01-docker-build.png)
 
@@ -101,10 +114,9 @@ deployment.apps/flask-app created
 service/flask-app-service created
 
 NAME        READY   UP-TO-DATE   AVAILABLE   AGE
-flask-app   1/1     1            1           2s
-
+flask-app   1/1     1            1           11m
 NAME                         READY   STATUS    RESTARTS   AGE
-flask-app-59f7cdccb4-7cn74   1/1     Running   0          2s
+flask-app-59f7cdccb4-7cn74   1/1     Running   0          11m
 ```
 
 Created the Deployment and Service from one YAML file. The Pod was running.
@@ -143,6 +155,7 @@ kubectl logs flask-app-59f7cdccb4-7cn74
 ```text
  * Serving Flask app 'app'
  * Debug mode: off
+WARNING: This is a development server. Do not use it in a production deployment. Use a production WSGI server instead.
  * Running on all addresses (0.0.0.0)
  * Running on http://127.0.0.1:15000
  * Running on http://10.244.0.3:15000
@@ -161,22 +174,35 @@ minikube service flask-app-service --url
 curl http://127.0.0.1:34067
 ```
 
-```text
-NAME                TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)           AGE
-flask-app-service   NodePort    10.97.148.200   <none>        15000:31009/TCP   14m
-kubernetes          ClusterIP   10.96.0.1       <none>        443/TCP           28m
+Tunnel (separate terminal):
 
+```text
 http://127.0.0.1:34067
 ! Because you are using a Docker driver on linux, the terminal needs to be open to run it.
+```
 
+```text
+NAME                TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)           AGE
+flask-app-service   NodePort    10.97.148.200   <none>        15000:31009/TCP   16m
+kubernetes          ClusterIP   10.96.0.1       <none>        443/TCP           31m
 Hello from Flask on Kubernetes!
 ```
 
-Ran `minikube service --url` in a separate terminal to keep the tunnel open, then curl returned the app's response.
-
-![service url](screenshots/06-service-url.png)
+Kept `minikube service --url` running in a separate terminal, and curl through the tunnel returned the app's response.
 
 ![curl](screenshots/04-service-curl.png)
+
+After redeploying the app, I opened a new tunnel (`http://127.0.0.1:42839`) and ran curl again:
+
+```bash
+curl http://127.0.0.1:42839
+```
+
+```text
+Hello from Flask on Kubernetes!
+```
+
+![service url](screenshots/06-service-url.png)
 
 ### 7. Clean up
 
@@ -244,6 +270,7 @@ kubectl logs flask-app-59f7cdccb4-7cn74
 kubectl get services
 minikube service flask-app-service --url
 curl http://127.0.0.1:34067
+curl http://127.0.0.1:42839
 kubectl delete -f flask-deployment.yaml
 ```
 

@@ -12,7 +12,7 @@ Zepto's storefront and delivery-tracking page runs as a web app inside container
 
 - Windows 11 Home + WSL2 Ubuntu 24.04.2 LTS
 - Docker Desktop (Engine 29.4.1)
-- Minikube v1.39.0 (docker driver, containerd runtime)
+- Minikube v1.39.0 (docker driver, containerd 2.3.4 runtime)
 - Kubernetes v1.37.0
 - kubectl v1.34.1
 - Image: `nginx:latest`
@@ -37,21 +37,26 @@ Source: [commands.sh](commands.sh)
 ### 1. Start Minikube
 
 ```bash
-minikube start --driver=docker
+minikube start
 ```
 
 ```text
 * minikube v1.39.0 on Ubuntu 24.04 (amd64)
-* Using the docker driver based on user configuration
+* Using the docker driver based on existing profile
 * Starting "minikube" primary control-plane node in "minikube" cluster
-* Configuring CNI (Container Networking Interface) ...
+* Pulling base image v0.0.51 ...
+* Updating the running docker "minikube" container ...
+* Preparing Kubernetes v1.37.0 on containerd 2.3.4 ...
 * Verifying Kubernetes components...
+  - Using image gcr.io/k8s-minikube/storage-provisioner:v5
 * Enabled addons: storage-provisioner, default-storageclass
+
 ! /usr/local/bin/kubectl is version 1.34.1, which may have incompatibilities with Kubernetes 1.37.0.
+  - Want kubectl v1.37.0? Try 'minikube kubectl -- get pods -A'
 * Done! kubectl is now configured to use "minikube" cluster and "default" namespace by default
 ```
 
-Started a single-node cluster. kubectl was switched to the `minikube` context.
+Started the single-node cluster (first created with `minikube start --driver=docker`). kubectl was switched to the `minikube` context.
 
 ![minikube start](screenshots/01-minikube-start.png)
 
@@ -66,7 +71,7 @@ kubectl get pods
 pod/hello-k8s created
 
 NAME        READY   STATUS    RESTARTS   AGE
-hello-k8s   1/1     Running   0          17s
+hello-k8s   1/1     Running   0          6m7s
 ```
 
 Created the `hello-k8s` Pod and it reached `Running`.
@@ -109,8 +114,8 @@ kubectl get svc
 service/hello-k8s exposed
 
 NAME         TYPE        CLUSTER-IP      EXTERNAL-IP   PORT(S)        AGE
-hello-k8s    NodePort    10.100.38.188   <none>        80:30258/TCP   1s
-kubernetes   ClusterIP   10.96.0.1       <none>        443/TCP        17m
+hello-k8s    NodePort    10.100.38.188   <none>        80:30258/TCP   30s
+kubernetes   ClusterIP   10.96.0.1       <none>        443/TCP        18m
 ```
 
 Exposed the Pod on NodePort 30258.
@@ -203,6 +208,7 @@ browser --> 127.0.0.1:34041 --> minikube tunnel --> 192.168.49.2:30258 (NodePort
 
 ```bash
 minikube start --driver=docker
+minikube start
 kubectl run hello-k8s --image=nginx --port=80
 kubectl get pods
 kubectl describe pod hello-k8s
