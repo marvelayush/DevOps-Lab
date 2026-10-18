@@ -38,8 +38,7 @@ Lab exercises based on the [DevOps Lab Manual](https://github.com/SunagP/DevOps-
 
 ```text
 ExNN-<name>/
-├── README.md       # everything for the exercise, including source code
+├── README.md       # steps, output, source code listings and result
+├── <source files>  # app code, Dockerfiles, YAML, scripts, Jenkinsfile
 └── screenshots/    # output screenshots referenced from the README
 ```
-
-Ex06, Ex08 and Ex09 also keep their real source files in the folder, because the Jenkins jobs check them out from this repository.
