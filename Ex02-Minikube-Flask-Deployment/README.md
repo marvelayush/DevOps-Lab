@@ -60,58 +60,35 @@ Source: [app.py](app.py) · [Dockerfile](Dockerfile) · [flask-deployment-no-ser
 
 ## Steps
 
-### 1. Start Minikube and check the cluster
+I ran this exercise three times. Run 1 was the full deployment, run 2 a redeploy to check the cluster and the tunnel again, and run 3 the manual's "without a Service first" stage.
 
-The app needs a running cluster. I started Minikube with the Docker runtime so its Docker daemon could be used for building, then checked that every part was up.
+### 1. Start Minikube (run 1)
+
+The app needs a running cluster. I started Minikube with the Docker runtime so its Docker daemon could be used for building.
 
 ```bash
 minikube start --driver=docker --container-runtime=docker
-minikube status
-kubectl cluster-info
 ```
 
 ```text
-minikube
-type: Control Plane
-host: Running
-kubelet: Running
-apiserver: Running
-kubeconfig: Configured
-docker-env: in-use
+* minikube v1.39.0 on Ubuntu 24.04 (amd64)
+* Using the docker driver based on user configuration
+* Using Docker driver with root privileges
+* Starting "minikube" primary control-plane node in "minikube" cluster
+* Pulling base image v0.0.51 ...
+* Downloading Kubernetes v1.37.0 preload ...
+* Configuring bridge CNI (Container Networking Interface) ...
+* Verifying Kubernetes components...
+  - Using image gcr.io/k8s-minikube/storage-provisioner:v5
+* Enabled addons: storage-provisioner, default-storageclass
 
-Kubernetes control plane is running at https://127.0.0.1:55645
-CoreDNS is running at https://127.0.0.1:55645/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
-
-To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+! /usr/local/bin/kubectl is version 1.34.1, which may have incompatibilities with Kubernetes 1.37.0.
+* Done! kubectl is now configured to use "minikube" cluster and "default" namespace by default
 ```
 
-The host, kubelet and API server were all running. `docker-env: in-use` showed that my shell was already pointed at Minikube's Docker. CoreDNS (the cluster DNS) was up too.
+A new single-node cluster came up with Kubernetes v1.37.0, and kubectl was pointed at it.
 
-![minikube status](screenshots/05-minikube-status.png)
-
-### 2. See what `minikube docker-env` sets
-
-Before switching Docker over, the manual asks to look at the variables `minikube docker-env` prints.
-
-```bash
-minikube docker-env
-```
-
-```text
-export DOCKER_TLS_VERIFY="1"
-export DOCKER_HOST="tcp://127.0.0.1:53505"
-export DOCKER_CERT_PATH="/home/ubuntu/.minikube/certs"
-export MINIKUBE_ACTIVE_DOCKERD="minikube"
-
-# To point your shell to minikube's docker-daemon, run:
-# eval $(minikube -p minikube docker-env)
-```
-
-`DOCKER_HOST` points the Docker CLI at the daemon inside the Minikube node, and the TLS settings make the connection secure. `eval` runs these export lines in the current shell.
-
-![docker-env](screenshots/07-docker-env.png)
-
-### 3. Build the image inside Minikube
+### 2. Build the image inside Minikube
 
 Building with Minikube's daemon puts the image where the kubelet can find it, so no registry is needed.
 
@@ -147,67 +124,20 @@ The image was built from the 4 Dockerfile steps. They show `CACHED` because the 
 
 ![docker build](screenshots/01-docker-build.png)
 
-### 4. Deploy without a Service and try to reach the app
+### 3. Deploy the app and check the Pod
 
-The manual first deploys only the Deployment, to show that a running Pod is not reachable from outside the cluster by itself.
+Applying the YAML creates the Deployment and its NodePort Service together. Then I checked that the Pod was running.
 
 ```bash
-kubectl apply -f flask-deployment-no-service.yaml
-kubectl rollout status deployment/flask-app
+kubectl apply -f flask-deployment.yaml
 kubectl get deployments
 kubectl get pods -l app=flask-app
-kubectl get services
-curl http://127.0.0.1:15000
 ```
 
 ```text
 deployment.apps/flask-app created
-Waiting for deployment "flask-app" rollout to finish: 0 of 1 updated replicas are available...
-deployment "flask-app" successfully rolled out
-NAME        READY   UP-TO-DATE   AVAILABLE   AGE
-flask-app   1/1     1            1           1s
-NAME                         READY   STATUS    RESTARTS   AGE
-flask-app-59f7cdccb4-pt9wm   1/1     Running   0          1s
-NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
-kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   119m
-curl: (7) Failed to connect to 127.0.0.1 port 15000 after 0 ms: Couldn't connect to server
-```
-
-The Pod was running, but only the built-in `kubernetes` Service existed. curl failed because port 15000 is only open inside the Pod, which runs inside the Minikube node, not on my machine.
-
-![no service](screenshots/08-no-service-curl-fail.png)
-
-### 5. Add the Service and apply again
-
-The full `flask-deployment.yaml` has the same Deployment plus a NodePort Service after a `---` line. Applying it adds only what's new.
-
-```bash
-kubectl apply -f flask-deployment.yaml
-kubectl get services
-```
-
-```text
-deployment.apps/flask-app unchanged
 service/flask-app-service created
-NAME                TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)           AGE
-flask-app-service   NodePort    10.104.29.38   <none>        15000:30293/TCP   0s
-kubernetes          ClusterIP   10.96.0.1      <none>        443/TCP           121m
-```
 
-`unchanged` means the Deployment was already as described, so Kubernetes left the Pod alone. Only the new Service was created, on NodePort 30293.
-
-![apply with service](screenshots/09-apply-with-service.png)
-
-### 6. Check the Deployment and Pod
-
-Steps 6–9 come from my first full run of the exercise, where I applied `flask-deployment.yaml` directly. That run had Pod `flask-app-59f7cdccb4-7cn74` and NodePort 31009.
-
-```bash
-kubectl get deployments
-kubectl get pods -l app=flask-app
-```
-
-```text
 NAME        READY   UP-TO-DATE   AVAILABLE   AGE
 flask-app   1/1     1            1           11m
 NAME                         READY   STATUS    RESTARTS   AGE
@@ -218,7 +148,7 @@ The Deployment had 1 of 1 replicas available. The Pod name starts with the Repli
 
 ![deployment and pods](screenshots/02-deployment-pods.png)
 
-### 7. Describe the Deployment
+### 4. Describe the Deployment
 
 `describe` shows the Deployment's settings and the events from its controller.
 
@@ -251,7 +181,7 @@ Events:
 
 The Deployment created ReplicaSet `flask-app-59f7cdccb4` and scaled it to 1. `RollingUpdate` means later image changes would replace Pods gradually.
 
-### 8. Read the application logs
+### 5. Read the application logs
 
 The logs show whether Flask actually started inside the container.
 
@@ -273,7 +203,7 @@ Flask was listening on port 15000 on all addresses, including the Pod IP 10.244.
 
 ![logs](screenshots/03-logs.png)
 
-### 9. Access the app through the Service
+### 6. Access the app through the Service
 
 With the Docker driver, the NodePort is inside the Minikube container. `minikube service --url` opens a tunnel to it, and that terminal has to stay open.
 
@@ -301,9 +231,43 @@ The request went through the tunnel to NodePort 31009, then to the Service, then
 
 ![curl](screenshots/04-service-curl.png)
 
-After redeploying, I opened a new tunnel (`http://127.0.0.1:42839`) and tested again:
+At the end of run 1, I deleted the Deployment and Service (`kubectl delete -f flask-deployment.yaml`).
+
+### 7. Check the cluster status (run 2)
+
+Started Minikube again, redeployed the same YAML, and checked every part of the cluster.
 
 ```bash
+minikube start --driver=docker --container-runtime=docker
+minikube status
+kubectl cluster-info
+```
+
+```text
+minikube
+type: Control Plane
+host: Running
+kubelet: Running
+apiserver: Running
+kubeconfig: Configured
+docker-env: in-use
+
+Kubernetes control plane is running at https://127.0.0.1:55645
+CoreDNS is running at https://127.0.0.1:55645/api/v1/namespaces/kube-system/services/kube-dns:dns/proxy
+
+To further debug and diagnose cluster problems, use 'kubectl cluster-info dump'.
+```
+
+The host, kubelet and API server were all running. `docker-env: in-use` showed that my shell was pointed at Minikube's Docker. CoreDNS (the cluster DNS) was up too.
+
+![minikube status](screenshots/05-minikube-status.png)
+
+### 8. Test through a new tunnel
+
+Each `minikube service --url` run picks a new local port. I opened a new tunnel (`http://127.0.0.1:42839`) and tested again.
+
+```bash
+minikube service flask-app-service --url
 curl http://127.0.0.1:42839
 ```
 
@@ -311,9 +275,86 @@ curl http://127.0.0.1:42839
 Hello from Flask on Kubernetes!
 ```
 
+The redeployed app answered through the new tunnel.
+
 ![service url](screenshots/06-service-url.png)
 
-### 10. Clean up
+At the end of run 2, I deleted the Deployment and Service again.
+
+### 9. See what `minikube docker-env` sets (run 3)
+
+Run 3 followed the manual's order exactly, starting with the variables `minikube docker-env` prints.
+
+```bash
+minikube docker-env
+```
+
+```text
+export DOCKER_TLS_VERIFY="1"
+export DOCKER_HOST="tcp://127.0.0.1:53505"
+export DOCKER_CERT_PATH="/home/ubuntu/.minikube/certs"
+export MINIKUBE_ACTIVE_DOCKERD="minikube"
+
+# To point your shell to minikube's docker-daemon, run:
+# eval $(minikube -p minikube docker-env)
+```
+
+`DOCKER_HOST` points the Docker CLI at the daemon inside the Minikube node, and the TLS settings make the connection secure. `eval` runs these export lines in the current shell.
+
+![docker-env](screenshots/07-docker-env.png)
+
+### 10. Deploy without a Service and try to reach the app
+
+The manual first deploys only the Deployment, to show that a running Pod is not reachable from outside the cluster by itself.
+
+```bash
+kubectl apply -f flask-deployment-no-service.yaml
+kubectl rollout status deployment/flask-app
+kubectl get deployments
+kubectl get pods -l app=flask-app
+kubectl get services
+curl http://127.0.0.1:15000
+```
+
+```text
+deployment.apps/flask-app created
+Waiting for deployment "flask-app" rollout to finish: 0 of 1 updated replicas are available...
+deployment "flask-app" successfully rolled out
+NAME        READY   UP-TO-DATE   AVAILABLE   AGE
+flask-app   1/1     1            1           1s
+NAME                         READY   STATUS    RESTARTS   AGE
+flask-app-59f7cdccb4-pt9wm   1/1     Running   0          1s
+NAME         TYPE        CLUSTER-IP   EXTERNAL-IP   PORT(S)   AGE
+kubernetes   ClusterIP   10.96.0.1    <none>        443/TCP   119m
+curl: (7) Failed to connect to 127.0.0.1 port 15000 after 0 ms: Couldn't connect to server
+```
+
+The Pod `pt9wm` was running, but only the built-in `kubernetes` Service existed. curl failed because port 15000 is only open inside the Pod, which runs inside the Minikube node, not on my machine.
+
+![no service](screenshots/08-no-service-curl-fail.png)
+
+### 11. Add the Service and apply again
+
+The full `flask-deployment.yaml` has the same Deployment plus a NodePort Service after a `---` line. Applying it adds only what's new.
+
+```bash
+kubectl apply -f flask-deployment.yaml
+kubectl get services
+```
+
+```text
+deployment.apps/flask-app unchanged
+service/flask-app-service created
+NAME                TYPE        CLUSTER-IP     EXTERNAL-IP   PORT(S)           AGE
+flask-app-service   NodePort    10.104.29.38   <none>        15000:30293/TCP   0s
+kubernetes          ClusterIP   10.96.0.1      <none>        443/TCP           121m
+```
+
+`unchanged` means the Deployment was already as described, so Kubernetes left the Pod alone. Only the new Service was created, on NodePort 30293.
+
+![apply with service](screenshots/09-apply-with-service.png)
+
+### 12. Clean up
 
 I deleted everything defined in the YAML file so the next exercise starts clean.
 
@@ -388,24 +429,26 @@ flask-deployment.yaml
 
 ```bash
 minikube start --driver=docker --container-runtime=docker
-minikube status
-kubectl cluster-info
-minikube docker-env
 eval $(minikube docker-env)
 docker build -t flask-app .
 docker images flask-app
-kubectl apply -f flask-deployment-no-service.yaml
-kubectl rollout status deployment/flask-app
+kubectl apply -f flask-deployment.yaml
 kubectl get deployments
 kubectl get pods -l app=flask-app
-kubectl get services
-curl http://127.0.0.1:15000
-kubectl apply -f flask-deployment.yaml
 kubectl describe deployment flask-app
 kubectl logs flask-app-59f7cdccb4-7cn74
 minikube service flask-app-service --url
+kubectl get services
 curl http://127.0.0.1:34067
+kubectl delete -f flask-deployment.yaml
+minikube status
+kubectl cluster-info
 curl http://127.0.0.1:42839
+minikube docker-env
+kubectl apply -f flask-deployment-no-service.yaml
+kubectl rollout status deployment/flask-app
+curl http://127.0.0.1:15000
+kubectl apply -f flask-deployment.yaml
 kubectl delete -f flask-deployment.yaml
 ```
 
