@@ -2,11 +2,37 @@
 
 ## Objective
 
-Deploy an Nginx web server as a single Pod on a local Minikube cluster. Expose it with a NodePort Service and open it in the browser to confirm the cluster can run and serve a containerised app.
+Run a first application on Kubernetes. I started a local cluster with Minikube, ran the Nginx web server as a Pod, exposed it with a NodePort Service and opened it in the browser.
 
 ## Use Case
 
-Zepto's storefront and delivery-tracking page runs as a web app inside containers. In this exercise Nginx stood in for that page, to show how such an app is started and exposed on Kubernetes.
+As a DevOps engineer at Zepto, I had to deploy the storefront and delivery-status web page on Kubernetes so that it stays running, is portable, and can be scaled later. The `nginx` image stood in for that web page.
+
+## Architecture
+
+```text
+ Windows browser
+       |
+       |  http://127.0.0.1:34041
+       v
+ minikube service tunnel (runs in a WSL terminal)
+       |
+       v
++---------------- Minikube node (Docker container, 192.168.49.2) ----------------+
+|                                                                                |
+|   NodePort 30258  ---->  Service "hello-k8s" (10.100.38.188:80)                |
+|                                  |                                             |
+|                                  |  selector: run=hello-k8s                    |
+|                                  v                                             |
+|                           Pod "hello-k8s" (10.244.0.3)                          |
+|                           +----------------------+                             |
+|                           |  nginx container :80 |                             |
+|                           +----------------------+                             |
+|                                                                                |
+|   Control plane: API Server, etcd, Scheduler, Controller Manager               |
+|   Node agents:   Kubelet, kube-proxy, containerd                               |
++--------------------------------------------------------------------------------+
+```
 
 ## Environment
 
@@ -14,27 +40,54 @@ Zepto's storefront and delivery-tracking page runs as a web app inside container
 - Docker Desktop (Engine 29.4.1)
 - Minikube v1.39.0 (docker driver, containerd 2.3.4 runtime)
 - Kubernetes v1.37.0
-- kubectl v1.34.1
+- kubectl v1.34.1 (Kustomize v5.7.1)
 - Image: `nginx:latest`
 
 ## Project Structure
 
 ```text
 Ex01-Kubernetes-Nginx-Pod/
-├── commands.sh      # all minikube / kubectl commands used
+├── commands.sh      # all minikube / kubectl commands used, in order
 ├── README.md
 └── screenshots/
     ├── 01-minikube-start.png
     ├── 02-pod-running.png
     ├── 03-service.png
-    └── 04-nginx-browser.png
+    ├── 04-nginx-browser.png
+    └── 05-tool-versions.png
 ```
 
 Source: [commands.sh](commands.sh)
 
 ## Steps
 
-### 1. Start Minikube
+### 1. Install and check the tools
+
+Before using Kubernetes, the cluster tool (Minikube), the client (kubectl) and a container engine (Docker) had to be installed. I installed Minikube in WSL the way the manual shows, then checked all three versions.
+
+```bash
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+sudo install minikube-linux-amd64 /usr/local/bin/minikube
+minikube version
+kubectl version --client
+docker --version
+```
+
+```text
+minikube version: v1.39.0
+commit: 7a9f6a841470a207de8cf4bafcccee0969d8ba10
+Client Version: v1.34.1
+Kustomize Version: v5.7.1
+Docker version 29.4.1, build 055a478
+```
+
+All three tools were installed. Docker came from Docker Desktop's WSL integration.
+
+![tool versions](screenshots/05-tool-versions.png)
+
+### 2. Start Minikube
+
+A Kubernetes cluster is needed before anything can be deployed. `minikube start` creates a one-node cluster inside a Docker container.
 
 ```bash
 minikube start
@@ -56,11 +109,13 @@ minikube start
 * Done! kubectl is now configured to use "minikube" cluster and "default" namespace by default
 ```
 
-Started the single-node cluster (first created with `minikube start --driver=docker`). kubectl was switched to the `minikube` context.
+The cluster was running Kubernetes v1.37.0 with containerd as the container runtime, and kubectl now pointed to it. The cluster had first been created with `minikube start --driver=docker`, so this run reused that profile.
 
 ![minikube start](screenshots/01-minikube-start.png)
 
-### 2. Create the Pod
+### 3. Create the Pod
+
+A Pod is the smallest thing Kubernetes runs. I created one from the `nginx` image and told Kubernetes the container listens on port 80.
 
 ```bash
 kubectl run hello-k8s --image=nginx --port=80
@@ -74,11 +129,13 @@ NAME        READY   STATUS    RESTARTS   AGE
 hello-k8s   1/1     Running   0          6m7s
 ```
 
-Created the `hello-k8s` Pod and it reached `Running`.
+`1/1` means one out of one container in the Pod was ready, and `Running` means it had started without errors.
 
 ![kubectl get pods](screenshots/02-pod-running.png)
 
-### 3. Describe the Pod
+### 4. Look inside the Pod
+
+`kubectl describe` shows where the Pod was placed and what happened while it started. That makes the internal steps of Kubernetes visible.
 
 ```bash
 kubectl describe pod hello-k8s
@@ -86,6 +143,7 @@ kubectl describe pod hello-k8s
 
 ```text
 Node:             minikube/192.168.49.2
+Labels:           run=hello-k8s
 Status:           Running
 IP:               10.244.0.3
 Containers:
@@ -93,6 +151,8 @@ Containers:
     Container ID:   containerd://a5c588b33da3c512ab9af1412f6b418ba6e73b51168be158c12b59a8e80cd307
     Image:          nginx
     Port:           80/TCP
+    State:          Running
+    Ready:          True
 Events:
   Normal  Scheduled  18s   default-scheduler  Successfully assigned default/hello-k8s to minikube
   Normal  Pulling    17s   kubelet            Pulling image "nginx"
@@ -101,9 +161,11 @@ Events:
   Normal  Started    2s    kubelet            Container started
 ```
 
-The events showed the scheduler assigning the node, then the kubelet pulling and starting the image.
+The Events show the order: the scheduler picked the node, then the kubelet pulled the image (about 15.7 s) and started the container. The Pod got its own IP, 10.244.0.3, and the label `run=hello-k8s`.
 
-### 4. Expose the Pod
+### 5. Expose the Pod as a Service
+
+A Pod's IP only works inside the cluster and changes if the Pod is recreated. A Service gives it a fixed address, and the NodePort type also opens a port on the node.
 
 ```bash
 kubectl expose pod hello-k8s --type=NodePort --port=80
@@ -118,11 +180,13 @@ hello-k8s    NodePort    10.100.38.188   <none>        80:30258/TCP   30s
 kubernetes   ClusterIP   10.96.0.1       <none>        443/TCP        18m
 ```
 
-Exposed the Pod on NodePort 30258.
+`80:30258/TCP` means Service port 80 is reachable on port 30258 of the node. The `kubernetes` Service is the built-in one for the API server.
 
 ![kubectl get svc](screenshots/03-service.png)
 
-### 5. Open in the browser
+### 6. Open the app in the browser
+
+With the Docker driver, the node lives inside a container, so its IP (192.168.49.2) can't be reached from Windows. `minikube service` creates a tunnel to the NodePort on localhost.
 
 ```bash
 minikube service hello-k8s
@@ -140,14 +204,18 @@ minikube service hello-k8s
 ├───────────┼───────────┼─────────────┼────────────────────────┤
 │ default   │ hello-k8s │             │ http://127.0.0.1:34041 │
 └───────────┴───────────┴─────────────┴────────────────────────┘
+* Opening service default/hello-k8s in default browser...
+  http://127.0.0.1:34041
 ! Because you are using a Docker driver on linux, the terminal needs to be open to run it.
 ```
 
-Opened `http://127.0.0.1:34041` and the Nginx welcome page loaded.
+The first table shows the real NodePort URL. The second shows the tunnel URL, which I opened in Chrome to get the "Welcome to nginx!" page.
 
 ![nginx page](screenshots/04-nginx-browser.png)
 
-### 6. Clean up
+### 7. Clean up
+
+I removed the Service and the Pod so the next exercise starts clean.
 
 ```bash
 kubectl delete svc hello-k8s
@@ -159,54 +227,63 @@ service "hello-k8s" deleted from default namespace
 pod "hello-k8s" deleted from default namespace
 ```
 
-Deleted the Service and the Pod.
+Both objects were deleted. Because the Pod was created with `kubectl run` and is not managed by a ReplicaSet, it was not recreated.
 
 ## How It Works
 
-Creating the Pod:
+What happened inside Kubernetes when I ran `kubectl run`:
 
 ```text
-kubectl run hello-k8s
+kubectl run hello-k8s --image=nginx
+      |
+      |  HTTPS request
+      v
+API Server  ------>  etcd            (Pod object saved, no node yet)
       |
       v
-API Server  ---->  etcd (Pod object stored)
+Scheduler   ------>  API Server      (Pod bound to node "minikube")
       |
       v
-Scheduler   ---->  binds Pod to node "minikube"
+Kubelet on "minikube" (watches the API server for its Pods)
       |
       v
-Kubelet (on minikube node)
+containerd  ------>  pull nginx image, create and start container
       |
       v
-containerd  ---->  pulls nginx, starts container
-      |
-      v
-nginx container (10.244.0.3:80)
+nginx container running at 10.244.0.3:80   (status sent back to API Server)
 ```
 
-Accessing it:
+And when I opened the page:
 
 ```text
-browser --> 127.0.0.1:34041 --> minikube tunnel --> 192.168.49.2:30258 (NodePort)
-        --> Service hello-k8s --> Pod 10.244.0.3:80
+browser -> 127.0.0.1:34041 -> minikube tunnel -> 192.168.49.2:30258 (NodePort)
+        -> kube-proxy rules -> Service hello-k8s :80 -> Pod 10.244.0.3:80 -> nginx
 ```
 
-- kubectl only talks to the API server, which validates the request and stores the Pod in etcd.
-- The scheduler sees an unassigned Pod and binds it to a node.
-- The kubelet on that node asks the container runtime (containerd) to pull the image and start the container.
-- The NodePort Service opens port 30258 on the node and forwards it to the Pod.
-- Minikube runs inside a Docker container on WSL2, so the node IP 192.168.49.2 is not reachable from Windows. `minikube service` opens a tunnel to it on localhost.
+- kubectl never starts containers itself. It only sends the desired object to the API server.
+- The API server is the only component that reads and writes etcd, the cluster's database.
+- The scheduler chooses a node for every Pod that doesn't have one yet. With one node, it always chose `minikube`.
+- The kubelet on the node makes the real container through the container runtime (containerd here) and reports the status back.
+- kube-proxy turns the Service into network rules, so traffic to the NodePort reaches the Pod.
+- `minikube service` was only needed because of the Docker driver on WSL2. On a real cluster, the NodePort is open on each node's IP.
 
 ## Key Configuration
 
-- `--image=nginx`: the container image the Pod runs, pulled from Docker Hub.
-- `--port=80`: the port the container listens on. It became the target port of the Service.
-- `--type=NodePort`: exposes the Service on a port from 30000–32767 on every node (30258 here). ClusterIP would only be reachable inside the cluster.
-- `minikube service`: needed because, with the Docker driver, the NodePort lives inside the Minikube container. The tunnel maps it to `127.0.0.1` and only works while that terminal stays open.
+- `kubectl run hello-k8s`: creates a single Pod named `hello-k8s`, with the label `run=hello-k8s` added automatically.
+- `--image=nginx`: the container image, pulled from Docker Hub (`nginx:latest`).
+- `--port=80`: records that the container listens on port 80. `kubectl expose` reused it as the Service's target port.
+- `kubectl expose pod ... --port=80`: creates a Service whose selector matches the Pod's labels, with port 80 on the Service.
+- `--type=NodePort`: also opens a port from 30000–32767 on the node (30258 was picked). The default type, ClusterIP, is only reachable inside the cluster.
+- `minikube service hello-k8s`: prints the URL and keeps a tunnel open to it. The terminal must stay open while the page is used.
 
 ## Commands Used
 
 ```bash
+curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64
+sudo install minikube-linux-amd64 /usr/local/bin/minikube
+minikube version
+kubectl version --client
+docker --version
 minikube start --driver=docker
 minikube start
 kubectl run hello-k8s --image=nginx --port=80
@@ -221,8 +298,8 @@ kubectl delete pod hello-k8s
 
 ## Problems Faced
 
-- `minikube start` warned that kubectl v1.34.1 may be incompatible with Kubernetes v1.37.0. All commands in this exercise worked normally, so I left it as is. `minikube kubectl --` would give a matching client.
+- `minikube start` warned that kubectl v1.34.1 may be incompatible with Kubernetes v1.37.0. All the commands in this exercise worked normally, so I continued. `minikube kubectl --` would give a client that matches the cluster version.
 
 ## Result
 
-Nginx ran as a Pod on Minikube. It was exposed with a NodePort Service on port 30258 and opened in the browser at `http://127.0.0.1:34041` through the Minikube tunnel.
+Nginx, standing in for Zepto's storefront page, ran as a Pod on a local Minikube cluster. It was exposed through a NodePort Service on port 30258 and opened in the browser at `http://127.0.0.1:34041` through the Minikube tunnel.
