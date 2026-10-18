@@ -59,15 +59,17 @@ Ex03-ReplicaSet-Scaling-FlashSale/
     ├── 06-buy-browser.png
     ├── 07-health-browser.png
     ├── 08-load-balancing.png
-    ├── 09-docker-push.png
-    ├── 10-describe-rs-logs.png
-    ├── 11-home-and-user-buy.png
+    ├── 09-describe-rs-logs.png
+    ├── 10-home-and-user-buy.png
+    ├── 11-docker-push.png
     └── 12-dockerhub-repo.png
 ```
 
 Source: [app.py](app.py) · [Dockerfile](Dockerfile) · [flashsale-replicaset.yaml](flashsale-replicaset.yaml)
 
 ## Steps
+
+I ran this exercise three times on the same cluster. Run 1 covers scaling and self-healing, run 2 covers access and load balancing, and run 3 covers inspection and the Docker Hub push. Each run created a new set of Pod names.
 
 ### 1. Start a fresh single-node cluster
 
@@ -94,53 +96,33 @@ minikube   Ready    control-plane   6s    v1.37.0
 
 One node, `minikube`, was Ready. It acts as both the control plane and the worker.
 
-### 2. Build the image and push it to Docker Hub
+### 2. Build the image inside Minikube
 
-The manual builds the image under my Docker Hub name and pushes it, so the image can also be pulled from anywhere. I built inside Minikube's Docker (so the cluster can use it directly) and pushed from there.
+The Pods need the `flashsale:1.0` image. Building it with Minikube's Docker daemon puts it where the kubelet can use it directly.
 
 ```bash
+minikube docker-env
 eval $(minikube docker-env)
 docker build -t flashsale:1.0 .
-docker build -t friction2004/flashsale:1.0 .
-docker push friction2004/flashsale:1.0
-docker images friction2004/flashsale
+docker images flashsale
 ```
 
 ```text
-[+] Building 1.7s (10/10) FINISHED                                   docker:default
- => [internal] load build definition from Dockerfile                           0.1s
- => => transferring dockerfile: 232B                                           0.0s
- => [internal] load metadata for docker.io/library/python:3.11-slim            1.5s
- => [auth] library/python:pull token for registry-1.docker.io                  0.0s
- => [1/4] FROM docker.io/library/python:3.11-slim@sha256:e88e9763f943ec1834f992a4b51e0f24500486803e8bc534e5767af9ea65f6ce  0.0s
- => CACHED [2/4] WORKDIR /app                                                  0.0s
- => CACHED [3/4] COPY app.py .                                                 0.0s
- => CACHED [4/4] RUN pip install --no-cache-dir flask gunicorn                 0.0s
- => => writing image sha256:a8aa6f385c2962f69a0bb13a880343900eb8d59547b5b56d885f5d25d48dbdb6  0.0s
- => => naming to docker.io/friction2004/flashsale:1.0                          0.0s
-The push refers to repository [docker.io/friction2004/flashsale]
-ce558dfdc07c: Pushed
-cbbd3c75b678: Pushed
-1234ff2bc678: Pushed
-020f37c339b9: Mounted from library/python
-ba18d048b43a: Mounted from library/python
-56864e09c373: Mounted from library/python
-15f1c8eb1ab1: Mounted from library/python
-1.0: digest: sha256:c14279683336438c55a108e3a660ceb69b5b915e403b452f906ace2604c3ddf2 size: 1783
+#4 [1/4] FROM docker.io/library/python:3.11-slim@sha256:e88e9763f943ec1834f992a4b51e0f24500486803e8bc534e5767af9ea65f6ce
+#4 DONE 14.1s
+#6 [2/4] WORKDIR /app
+#7 [3/4] COPY app.py .
+#8 [4/4] RUN pip install --no-cache-dir flask gunicorn
+#8 5.232 Successfully installed blinker-1.9.0 click-8.5.0 flask-3.1.3 gunicorn-26.2.0 itsdangerous-2.2.0 jinja2-3.1.6 markupsafe-3.0.4 werkzeug-3.1.9
+#9 naming to docker.io/library/flashsale:1.0 done
 
-IMAGE                     ID             DISK USAGE   CONTENT SIZE   EXTRA
-friction2004/flashsale:1.0 a8aa6f385c29        143MB             0B    U
+IMAGE           ID             DISK USAGE   CONTENT SIZE   EXTRA
+flashsale:1.0   a8aa6f385c29        143MB             0B
 ```
 
-The image ID `a8aa6f385c29` is the same as `flashsale:1.0`, so both tags point to one image. Only my 3 app layers were uploaded. The 4 Python base layers were "Mounted from library/python" because Docker Hub already had them.
+The 4 Dockerfile steps ran, and pip installed Flask 3.1.3 and gunicorn 26.2.0. The image ID is `a8aa6f385c29`. (`minikube docker-env` prints the same variables shown in Exercise 2.)
 
-![docker push](screenshots/09-docker-push.png)
-
-The repository page on Docker Hub confirmed the upload: `friction2004/flashsale` with one tag, `1.0` (linux/amd64), pushed 2 minutes earlier, repository size 49.5 MB.
-
-![docker hub repo](screenshots/12-dockerhub-repo.png)
-
-### 3. Create the ReplicaSet and Service
+### 3. Create the ReplicaSet and Service (run 1)
 
 The YAML asks for 3 identical Pods and a Service in front of them. Applying it hands that desired state to Kubernetes.
 
@@ -195,7 +177,7 @@ Two new Pods (`lljs4`, `rz4j6`, 90 s old) were added next to the original three.
 
 ### 5. Delete a Pod and watch it come back
 
-This simulates a Pod crashing during the sale. The ReplicaSet should notice that only 4 are left and make a new one.
+This simulates a Pod crashing during the sale. The ReplicaSet should notice that only 4 are left and make a new one. I first deleted `flashsale-rs-c7qlw`, which was replaced by `flashsale-rs-4kc6c`, then deleted a second Pod:
 
 ```bash
 kubectl delete pod flashsale-rs-d9f9c
@@ -212,7 +194,7 @@ flashsale-rs-rz4j6   1/1     Running   0          3m6s
 flashsale-rs-vkppk   0/1     Running   0          2s
 ```
 
-`flashsale-rs-vkppk` appeared 2 seconds after the delete. It was `0/1` because its readiness probe hadn't passed yet. `flashsale-rs-4kc6c` is the replacement from an earlier delete of `flashsale-rs-c7qlw`, so there were still 5 Pods.
+`flashsale-rs-vkppk` appeared 2 seconds after the delete, so there were still 5 Pods. It was `0/1` because its readiness probe hadn't passed yet.
 
 ![self healing](screenshots/03-self-healing.png)
 
@@ -237,9 +219,77 @@ All 5 Pods were on the single node `minikube`, each with its own IP from 10.244.
 
 ![wide](screenshots/04-pods-wide.png)
 
-### 7. Inspect the ReplicaSet and a Pod's logs
+At the end of run 1, I deleted the ReplicaSet and Service (`kubectl delete -f flashsale-replicaset.yaml`).
 
-The manual's tips suggest `describe` and `logs` to see what the ReplicaSet manages and whether gunicorn started. For this I re-applied the YAML and scaled to 5 again (new Pods `642mc`, `dknv9`, `fkrp8`, `nqgzb`, `ql2qn`).
+### 7. Reach the Service from my machine (run 2)
+
+Re-applied the ReplicaSet and scaled to 5 (new Pods `2j6g9`, `5llr5`, `fxn2c`, `xbh6d`, `xzkcm`).
+
+The Service is ClusterIP (internal only), so I used `kubectl port-forward` in a separate window to open it on `localhost:8080`.
+
+```bash
+kubectl port-forward svc/flashsale-svc 8080:80
+```
+
+```text
+Forwarding from 127.0.0.1:8080 -> 5000
+Forwarding from [::1]:8080 -> 5000
+Handling connection for 8080
+```
+
+Port 8080 on my machine now led to port 5000 of a Pod behind the Service. Each "Handling connection" line is one request.
+
+![port-forward](screenshots/05-port-forward.png)
+
+### 8. Call /buy and /health in the browser
+
+`/buy` is the checkout endpoint and `/health` is what the probes call. Both return the Pod name.
+
+```text
+http://localhost:8080/buy
+{"item":"Shoes","served_by_pod":"flashsale-rs-fxn2c","status":"success","time":"11:53:37","user":"user466"}
+
+http://localhost:8080/health
+{"pod":"flashsale-rs-fxn2c","status":"healthy"}
+```
+
+The checkout returned a random item and user, and the health check said `healthy`. Both were served by Pod `fxn2c`.
+
+![buy](screenshots/06-buy-browser.png)
+
+![health](screenshots/07-health-browser.png)
+
+### 9. Show load balancing across the Pods
+
+Port-forward always connects to a single Pod, so the browser requests all came from `fxn2c`. To see the Service balance the load, I sent requests from a temporary curl Pod inside the cluster.
+
+```bash
+kubectl run lb-test --rm -i --restart=Never --image=curlimages/curl -- sh -c 'sleep 3; for i in 1 2 3 4 5 6 7 8; do curl -s http://flashsale-svc/buy; echo; done'
+```
+
+```text
+{"item":"Shoes","served_by_pod":"flashsale-rs-xzkcm","status":"success","time":"11:58:21","user":"user129"}
+{"item":"Smartphone","served_by_pod":"flashsale-rs-5llr5","status":"success","time":"11:58:21","user":"user605"}
+{"item":"Smartphone","served_by_pod":"flashsale-rs-fxn2c","status":"success","time":"11:58:21","user":"user375"}
+{"item":"Smartphone","served_by_pod":"flashsale-rs-2j6g9","status":"success","time":"11:58:21","user":"user798"}
+{"item":"Shoes","served_by_pod":"flashsale-rs-xbh6d","status":"success","time":"11:58:21","user":"user235"}
+{"item":"Smartphone","served_by_pod":"flashsale-rs-xbh6d","status":"success","time":"11:58:21","user":"user627"}
+{"item":"Headphones","served_by_pod":"flashsale-rs-xzkcm","status":"success","time":"11:58:21","user":"user364"}
+{"item":"Laptop","served_by_pod":"flashsale-rs-2j6g9","status":"success","time":"11:58:21","user":"user338"}
+pod "lb-test" deleted from default namespace
+```
+
+The Service spread the 8 requests across all 5 Pods. `--rm` deleted the test Pod when it finished.
+
+![load balancing](screenshots/08-load-balancing.png)
+
+At the end of run 2, I stopped port-forward and deleted the ReplicaSet and Service.
+
+### 10. Inspect the ReplicaSet and a Pod's logs (run 3)
+
+Re-applied the ReplicaSet and scaled to 5 (new Pods `642mc`, `dknv9`, `fkrp8`, `nqgzb`, `ql2qn`).
+
+The manual's tips suggest `describe` and `logs` to see what the ReplicaSet manages and whether gunicorn started.
 
 ```bash
 kubectl describe rs flashsale-rs
@@ -284,47 +334,11 @@ Events:
 
 `describe` confirmed 5 of 5 Pods running, and showed the probes and resource limits from the YAML. The events show the replicaset-controller creating each Pod. The logs show gunicorn listening on 0.0.0.0:5000 with the threaded worker.
 
-![describe and logs](screenshots/10-describe-rs-logs.png)
+![describe and logs](screenshots/09-describe-rs-logs.png)
 
-### 8. Reach the Service from my machine
+### 11. Call / and /buy with a user name
 
-The Service is ClusterIP (internal only), so I used `kubectl port-forward` to open it on `localhost:8080`.
-
-```bash
-kubectl port-forward svc/flashsale-svc 8080:80
-```
-
-```text
-Forwarding from 127.0.0.1:8080 -> 5000
-Forwarding from [::1]:8080 -> 5000
-Handling connection for 8080
-```
-
-Port 8080 on my machine now led to port 5000 of a Pod behind the Service. Each "Handling connection" line is one request.
-
-![port-forward](screenshots/05-port-forward.png)
-
-### 9. Call /buy and /health in the browser
-
-`/buy` is the checkout endpoint and `/health` is what the probes call. Both return the Pod name.
-
-```text
-http://localhost:8080/buy
-{"item":"Shoes","served_by_pod":"flashsale-rs-fxn2c","status":"success","time":"11:53:37","user":"user466"}
-
-http://localhost:8080/health
-{"pod":"flashsale-rs-fxn2c","status":"healthy"}
-```
-
-The checkout returned a random item and user, and the health check said `healthy`. Both were served by the same Pod.
-
-![buy](screenshots/06-buy-browser.png)
-
-![health](screenshots/07-health-browser.png)
-
-### 10. Call / and /buy with a user name
-
-The home endpoint welcomes users, and `/buy` accepts `?user=` instead of a random user.
+With port-forward running again, I tested the home endpoint and the `?user=` option of `/buy`.
 
 ```bash
 curl -s localhost:8080/
@@ -337,37 +351,57 @@ curl -s "localhost:8080/buy?user=ayush"
 {"item":"Headphones","served_by_pod":"flashsale-rs-642mc","status":"success","time":"12:50:19","user":"ayush"}
 ```
 
-`/` returned the welcome message with a timestamp, and `/buy` used my name, `ayush`, as the user.
+`/` returned the welcome message with a timestamp, and `/buy` used my name, `ayush`, as the user. Both were served by `642mc`.
 
-![home and user](screenshots/11-home-and-user-buy.png)
+![home and user](screenshots/10-home-and-user-buy.png)
 
-### 11. Show load balancing across the Pods
+### 12. Tag and push the image to Docker Hub
 
-Port-forward always connects to a single Pod, so every request above came from one Pod. To see the Service balance the load, I sent requests from a temporary curl Pod inside the cluster.
+The manual builds the image under my Docker Hub name and pushes it, so it can be pulled from any machine. After `docker login`, I built and pushed from Minikube's Docker.
 
 ```bash
-kubectl run lb-test --rm -i --restart=Never --image=curlimages/curl -- sh -c 'sleep 3; for i in 1 2 3 4 5 6 7 8; do curl -s http://flashsale-svc/buy; echo; done'
+docker build -t friction2004/flashsale:1.0 .
+docker push friction2004/flashsale:1.0
+docker images friction2004/flashsale
 ```
 
 ```text
-{"item":"Shoes","served_by_pod":"flashsale-rs-xzkcm","status":"success","time":"11:58:21","user":"user129"}
-{"item":"Smartphone","served_by_pod":"flashsale-rs-5llr5","status":"success","time":"11:58:21","user":"user605"}
-{"item":"Smartphone","served_by_pod":"flashsale-rs-fxn2c","status":"success","time":"11:58:21","user":"user375"}
-{"item":"Smartphone","served_by_pod":"flashsale-rs-2j6g9","status":"success","time":"11:58:21","user":"user798"}
-{"item":"Shoes","served_by_pod":"flashsale-rs-xbh6d","status":"success","time":"11:58:21","user":"user235"}
-{"item":"Smartphone","served_by_pod":"flashsale-rs-xbh6d","status":"success","time":"11:58:21","user":"user627"}
-{"item":"Headphones","served_by_pod":"flashsale-rs-xzkcm","status":"success","time":"11:58:21","user":"user364"}
-{"item":"Laptop","served_by_pod":"flashsale-rs-2j6g9","status":"success","time":"11:58:21","user":"user338"}
-pod "lb-test" deleted from default namespace
+[+] Building 1.7s (10/10) FINISHED                                   docker:default
+ => [internal] load build definition from Dockerfile                           0.1s
+ => => transferring dockerfile: 232B                                           0.0s
+ => [internal] load metadata for docker.io/library/python:3.11-slim            1.5s
+ => [auth] library/python:pull token for registry-1.docker.io                  0.0s
+ => [1/4] FROM docker.io/library/python:3.11-slim@sha256:e88e9763f943ec1834f992a4b51e0f24500486803e8bc534e5767af9ea65f6ce  0.0s
+ => CACHED [2/4] WORKDIR /app                                                  0.0s
+ => CACHED [3/4] COPY app.py .                                                 0.0s
+ => CACHED [4/4] RUN pip install --no-cache-dir flask gunicorn                 0.0s
+ => => writing image sha256:a8aa6f385c2962f69a0bb13a880343900eb8d59547b5b56d885f5d25d48dbdb6  0.0s
+ => => naming to docker.io/friction2004/flashsale:1.0                          0.0s
+The push refers to repository [docker.io/friction2004/flashsale]
+ce558dfdc07c: Pushed
+cbbd3c75b678: Pushed
+1234ff2bc678: Pushed
+020f37c339b9: Mounted from library/python
+ba18d048b43a: Mounted from library/python
+56864e09c373: Mounted from library/python
+15f1c8eb1ab1: Mounted from library/python
+1.0: digest: sha256:c14279683336438c55a108e3a660ceb69b5b915e403b452f906ace2604c3ddf2 size: 1783
+
+IMAGE                      ID             DISK USAGE   CONTENT SIZE   EXTRA
+friction2004/flashsale:1.0 a8aa6f385c29        143MB             0B    U
 ```
 
-The Service spread the 8 requests across all 5 Pods. `--rm` deleted the test Pod when it finished.
+The image ID `a8aa6f385c29` is the same as in step 2, so this is the image the Pods ran. Only my 3 app layers were uploaded. The 4 Python base layers were "Mounted from library/python" because Docker Hub already had them.
 
-![load balancing](screenshots/08-load-balancing.png)
+![docker push](screenshots/11-docker-push.png)
 
-### 12. Clean up
+The repository page on Docker Hub confirmed the upload: `friction2004/flashsale` with one tag, `1.0` (linux/amd64), pushed 2 minutes earlier, repository size 49.5 MB.
 
-I deleted the ReplicaSet and the Service, which also removed all their Pods.
+![docker hub repo](screenshots/12-dockerhub-repo.png)
+
+### 13. Clean up
+
+I stopped port-forward and deleted the ReplicaSet and the Service, which also removed all their Pods.
 
 ```bash
 kubectl delete -f flashsale-replicaset.yaml
@@ -440,11 +474,10 @@ minikube stop
 minikube delete
 minikube start --nodes=1 --driver=docker --container-runtime=docker
 kubectl get nodes
+minikube docker-env
 eval $(minikube docker-env)
 docker build -t flashsale:1.0 .
-docker build -t friction2004/flashsale:1.0 .
-docker push friction2004/flashsale:1.0
-docker images friction2004/flashsale
+docker images flashsale
 kubectl apply -f flashsale-replicaset.yaml
 kubectl get rs
 kubectl get pods
@@ -452,14 +485,18 @@ kubectl scale rs flashsale-rs --replicas=5
 kubectl delete pod flashsale-rs-c7qlw
 kubectl delete pod flashsale-rs-d9f9c
 kubectl get pods -o wide
-kubectl describe rs flashsale-rs
-kubectl logs flashsale-rs-642mc
 kubectl port-forward svc/flashsale-svc 8080:80
 curl http://localhost:8080/buy
 curl http://localhost:8080/health
+kubectl run lb-test --rm -i --restart=Never --image=curlimages/curl -- sh -c 'sleep 3; for i in 1 2 3 4 5 6 7 8; do curl -s http://flashsale-svc/buy; echo; done'
+kubectl describe rs flashsale-rs
+kubectl logs flashsale-rs-642mc
 curl -s localhost:8080/
 curl -s "localhost:8080/buy?user=ayush"
-kubectl run lb-test --rm -i --restart=Never --image=curlimages/curl -- sh -c 'sleep 3; for i in 1 2 3 4 5 6 7 8; do curl -s http://flashsale-svc/buy; echo; done'
+docker login
+docker build -t friction2004/flashsale:1.0 .
+docker push friction2004/flashsale:1.0
+docker images friction2004/flashsale
 kubectl delete -f flashsale-replicaset.yaml
 ```
 
