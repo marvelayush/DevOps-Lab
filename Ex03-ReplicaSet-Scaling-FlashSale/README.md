@@ -61,7 +61,8 @@ Ex03-ReplicaSet-Scaling-FlashSale/
     ├── 08-load-balancing.png
     ├── 09-docker-push.png
     ├── 10-describe-rs-logs.png
-    └── 11-home-and-user-buy.png
+    ├── 11-home-and-user-buy.png
+    └── 12-dockerhub-repo.png
 ```
 
 Source: [app.py](app.py) · [Dockerfile](Dockerfile) · [flashsale-replicaset.yaml](flashsale-replicaset.yaml)
@@ -134,6 +135,10 @@ friction2004/flashsale:1.0 a8aa6f385c29        143MB             0B    U
 The image ID `a8aa6f385c29` is the same as `flashsale:1.0`, so both tags point to one image. Only my 3 app layers were uploaded. The 4 Python base layers were "Mounted from library/python" because Docker Hub already had them.
 
 ![docker push](screenshots/09-docker-push.png)
+
+The repository page on Docker Hub confirmed the upload: `friction2004/flashsale` with one tag, `1.0` (linux/amd64), pushed 2 minutes earlier, repository size 49.5 MB.
+
+![docker hub repo](screenshots/12-dockerhub-repo.png)
 
 ### 3. Create the ReplicaSet and Service
 
